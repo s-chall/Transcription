@@ -19,14 +19,14 @@ A fully automated audio transcription tool that turns interviews, meetings, and 
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/s-chall/Transcription.git
-cd Transcription
+git clone https://github.com/s-chall/whisper-speaker-diarization.git
+cd whisper-speaker-diarization
 ```
 
 ### 2. Install dependencies
 
 ```bash
-pip install -r requirements.txt
+pip3 install -r requirements.txt
 ```
 
 > ⚠️ You'll also need **ffmpeg** installed on your system for audio format conversion.
