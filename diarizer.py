@@ -1,18 +1,56 @@
-import os
+"""Speaker diarization utilities using pyannote.audio.
+
+Wraps the pyannote speaker-diarization-3.1 pipeline to produce time-stamped,
+speaker-labelled segments from an audio file.
+"""
+
+from __future__ import annotations
+
 from pyannote.audio import Pipeline
 from pyannote.core import Annotation
 
 
 def load_diarization_pipeline(hf_token: str) -> Pipeline:
-    pipeline = Pipeline.from_pretrained(
+    """Load the pyannote speaker-diarization pipeline from HuggingFace.
+
+    Args:
+        hf_token: A HuggingFace access token with access to the
+            pyannote/speaker-diarization-3.1 model.
+
+    Returns:
+        A ready-to-use pyannote Pipeline instance.
+    """
+    return Pipeline.from_pretrained(
         "pyannote/speaker-diarization-3.1",
         use_auth_token=hf_token,
     )
-    return pipeline
 
 
-def diarize(pipeline: Pipeline, audio_path: str, num_speakers: int = None, min_speakers: int = None, max_speakers: int = None) -> list[dict]:
-    kwargs = {}
+def diarize(
+    pipeline: Pipeline,
+    audio_path: str,
+    num_speakers: int | None = None,
+    min_speakers: int | None = None,
+    max_speakers: int | None = None,
+) -> list[dict]:
+    """Run speaker diarization on an audio file.
+
+    Exactly one of num_speakers (precise count) or the min/max pair should be
+    provided for best accuracy.  If none are given, pyannote estimates the
+    number automatically.
+
+    Args:
+        pipeline: A loaded pyannote Pipeline instance.
+        audio_path: Path to the audio file to diarize.
+        num_speakers: Exact number of speakers (overrides min/max).
+        min_speakers: Lower bound on the expected speaker count.
+        max_speakers: Upper bound on the expected speaker count.
+
+    Returns:
+        A list of dicts with keys "start" (float), "end" (float), and
+        "speaker" (str), sorted by start time.
+    """
+    kwargs: dict = {}
     if num_speakers is not None:
         kwargs["num_speakers"] = num_speakers
     else:
@@ -23,25 +61,34 @@ def diarize(pipeline: Pipeline, audio_path: str, num_speakers: int = None, min_s
 
     diarization: Annotation = pipeline(audio_path, **kwargs)
 
-    segments = []
-    for turn, _, speaker in diarization.itertracks(yield_label=True):
-        segments.append({
+    segments = [
+        {
             "start": round(turn.start, 3),
             "end": round(turn.end, 3),
             "speaker": speaker,
-        })
-
+        }
+        for turn, _, speaker in diarization.itertracks(yield_label=True)
+    ]
     segments.sort(key=lambda s: s["start"])
     return segments
 
 
 def normalize_speaker_labels(segments: list[dict]) -> list[dict]:
-    label_map = {}
-    counter = 1
+    """Re-label raw pyannote speaker IDs as sequential "Speaker N" strings.
+
+    pyannote returns opaque labels like "SPEAKER_00".  This function maps them
+    to human-friendly names in order of first appearance.
+
+    Args:
+        segments: List of diarization dicts (mutated in place).
+
+    Returns:
+        The same list with "speaker" values replaced.
+    """
+    label_map: dict[str, str] = {}
     for seg in segments:
         raw = seg["speaker"]
         if raw not in label_map:
-            label_map[raw] = f"Speaker {counter}"
-            counter += 1
+            label_map[raw] = f"Speaker {len(label_map) + 1}"
         seg["speaker"] = label_map[raw]
     return segments
